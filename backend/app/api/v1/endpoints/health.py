@@ -35,10 +35,13 @@ def health():
 @router.post("/celery/", response_model=ApiResponse[dict], dependencies=[Depends(require_roles(UserRole.ADMIN))])
 def celery_check():
     """Admin-only: enqueue the sample task and wait for the worker's result."""
+    from celery.exceptions import TimeoutError as CeleryTimeoutError
     from app.tasks.sample_tasks import ping
 
     try:
         result = ping.delay().get(timeout=10)
+    except CeleryTimeoutError:
+        raise AppError("Celery worker timed out", 504)
     except Exception:
         raise AppError("Celery worker did not respond", 503)
     return ApiResponse(message="Celery worker responded", data={"result": result})

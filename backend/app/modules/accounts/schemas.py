@@ -20,6 +20,14 @@ class RegisterIn(BaseModel):
 
     _pw = field_validator("password")(_check_password)
 
+    @field_validator("full_name")
+    @classmethod
+    def _validate_full_name(cls, v: str) -> str:
+        cleaned = v.strip()
+        if not cleaned:
+            raise ValueError("Full name cannot be blank")
+        return cleaned
+
 
 class UserCreateIn(RegisterIn):
     """Admin-only: the one place a role can be chosen."""
