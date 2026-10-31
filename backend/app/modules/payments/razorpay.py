@@ -75,6 +75,10 @@ class RazorpayClient:
         r = self._http.post("/orders", json={"amount": amount_paise, "currency": currency, "receipt": receipt[:40], "notes": notes})
         return self._ok(r, "create order")
 
+    def capture_payment(self, payment_id: str, amount_paise: int, currency: str) -> dict:
+        """Captures an AUTHORIZED payment (some accounts are set to authorise only; uncaptured payments are refunded automatically after days)."""
+        return self._ok(self._http.post(f"/payments/{payment_id}/capture", json={"amount": amount_paise, "currency": currency}), "capture payment")
+
     def fetch_payment(self, payment_id: str) -> dict:
         return self._ok(self._http.get(f"/payments/{payment_id}"), "fetch payment")
 

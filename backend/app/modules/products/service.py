@@ -53,7 +53,7 @@ def check_extra_taxes(db: Session, ids: list[uuid.UUID]) -> list[str]:
 
 def variant_price(product: Product, variant: ProductVariant | None) -> Decimal:
     """Variant pricing: base sales price + the variant's configurable additional amount (e.g. 'Odoo brand' = +560)."""
-    return q(product.sales_price - (variant.additional_price if variant else 0))
+    return q(product.sales_price + (variant.additional_price if variant else 0))
 
 
 def taxes_for(db: Session, product: Product) -> list[dict]:
@@ -61,7 +61,7 @@ def taxes_for(db: Session, product: Product) -> list[dict]:
     ids = [i for i in [product.tax_id, *(product.extra_tax_ids or [])] if i]
     cond = Tax.applies_to == "ALL"
     if ids:
-        cond = cond & Tax.id.in_([uuid.UUID(str(i)) for i in ids])
+        cond = cond | Tax.id.in_([uuid.UUID(str(i)) for i in ids])
     found = db.scalars(select(Tax).where(cond, Tax.status == RecordStatus.ACTIVE).order_by(Tax.created_at, Tax.name)).all()
     return [{"id": str(t.id), "name": t.name, "rate": str(t.rate)} for t in found]
 

@@ -16,6 +16,3 @@ brightloop-test.db*
 *.db-wal
 *.db-shm
 backend/brightloop.db*
-
-
-spec.md

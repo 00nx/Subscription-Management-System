@@ -20,6 +20,12 @@ export const authService = {
   async requestPasswordReset(email: string): Promise<string> {
     return (await api.post<ApiEnvelope<null>>('/auth/password-reset/', { email })).data.message
   },
+  async confirmPasswordReset(token: string, new_password: string): Promise<string> {
+    return (await api.post<ApiEnvelope<null>>('/auth/password-reset/confirm/', { token, new_password })).data.message
+  },
+  async changePassword(current_password: string, new_password: string): Promise<string> {
+    return (await api.post<ApiEnvelope<null>>('/auth/change-password/', { current_password, new_password })).data.message
+  },
   /** On page load: trade the refresh cookie for a new access token. Null when there is no session. */
   async restoreSession(): Promise<User | null> {
     if (!hasSessionCookie()) return null

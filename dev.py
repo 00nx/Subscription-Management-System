@@ -273,6 +273,21 @@ def ngrok_public_url() -> str | None:
     return None
 
 
+def razorpay_status() -> str:
+    """One line for the startup banner: is Razorpay Test Mode usable? (values are never printed)"""
+    env = {**read_env(BACKEND / ".env"), **{k: v for k, v in os.environ.items() if k.startswith("RAZORPAY_")}}
+    kid, sec, wh = (env.get(k, "").strip() for k in ("RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET", "RAZORPAY_WEBHOOK_SECRET"))
+    if not kid and not sec:
+        return "Razorpay: not configured (optional). Add your rzp_test_ keys to backend/.env, then restart. Check: run.cmd razorpay"
+    if not kid.startswith("rzp_test_"):
+        return "Razorpay: PROBLEM - RAZORPAY_KEY_ID is not a Test Mode key (it must start with rzp_test_; a LIVE key is refused and webhooks answer 503). In the Razorpay dashboard switch to Test Mode, generate a key there, put it in backend/.env and restart."
+    if not sec:
+        return "Razorpay: PROBLEM - RAZORPAY_KEY_SECRET is empty in backend/.env."
+    if not wh or wh.startswith("http"):
+        return "Razorpay: PROBLEM - RAZORPAY_WEBHOOK_SECRET " + ("is empty" if not wh else "is a URL; it must be a random string you invent (the same one you type in the dashboard)") + " in backend/.env."
+    return "Razorpay: ready (Test Mode keys found). Check everything with: run.cmd razorpay"
+
+
 def start_ngrok(extra: list) -> str | None:
     """Starts `ngrok http 8000` if it is installed and no tunnel exists yet. Never fatal: the app works without it. Returns the public URL."""
     if (url := ngrok_public_url()):
@@ -282,7 +297,7 @@ def start_ngrok(extra: list) -> str | None:
     if not exe:
         say("ngrok not found: skipping the tunnel (only needed for Razorpay webhooks). Install it from https://ngrok.com/download, then run `ngrok config add-authtoken <token>` once.")
         return None
-    spawn("ngrok", [exe, "http", "8000", "--log=stdout"], ROOT, extra)
+    spawn("ngrok", [exe, "http", "127.0.0.1:8000", "--log=stdout"], ROOT, extra)  # 127.0.0.1, not "localhost": avoids ngrok reaching a different listener over IPv6
     proc = extra[-1][1]
     deadline = time.time() + 20
     while time.time() < deadline:
@@ -337,6 +352,7 @@ def start(npm: str, use_ngrok: bool = True) -> None:
     alice@example.com      / Customer@12345
   Logs are in the logs/ folder.  Press Ctrl+C here to stop everything.
 =================================================================
+  """ + razorpay_status() + """
 """ + (f"""  Razorpay webhook URL (paste into Razorpay Dashboard > Settings > Webhooks, Test Mode):
     {tunnel}/api/v1/webhooks/razorpay/
   Secret = RAZORPAY_WEBHOOK_SECRET from backend/.env. Events: payment.captured, payment.failed, order.paid.

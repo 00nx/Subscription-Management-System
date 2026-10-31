@@ -6,6 +6,7 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.core.enums import PaymentMethod, PaymentStatus as PS
 from app.core.exceptions import AppError
 from app.core.money import q
@@ -68,6 +69,17 @@ def _apply_captured(db: Session, p: Payment, rp_payment_id: str, method: str | N
         raise
 
 
+def _capture(db: Session, p: Payment, rp_payment_id: str) -> dict | None:
+    """Captures an authorized payment server-side. Returns Razorpay's payment, or None (and a log line) if that is not possible right now."""
+    try:
+        done = rz.client().capture_payment(rp_payment_id, paise(p.amount), p.invoice.currency)
+    except AppError as exc:
+        _log(db, p, "CAPTURE_FAILED", "PENDING", f"Authorized but could not be captured automatically ({exc.message}). Capture it in the Razorpay dashboard or retry.", rp_payment_id)
+        return None
+    _log(db, p, "CAPTURED_BY_SERVER", "PENDING", f"Authorized payment {rp_payment_id} captured by Brightloop", rp_payment_id)
+    return done
+
+
 def verify_checkout(db: Session, user: User, payment_id: uuid.UUID, order_id: str, rp_payment_id: str, signature: str) -> Payment:
     """Browser hand-off: validates the signature, then CONFIRMS with Razorpay server-to-server before crediting anything."""
     p = get_payment(db, user, payment_id, lock=True)
@@ -91,6 +103,8 @@ def verify_checkout(db: Session, user: User, payment_id: uuid.UUID, order_id: st
         _log(db, p, "CONFIRMATION_MISMATCH", "PENDING", "Razorpay payment does not match this order/amount; not credited", rp_payment_id)
         db.commit()
         raise AppError("Razorpay payment does not match this order", 400)
+    if remote.get("status") == "authorized" and (done := _capture(db, p, rp_payment_id)):
+        remote = {**remote, **done}
     if remote.get("status") == "captured":
         try:
             _apply_captured(db, p, rp_payment_id, remote.get("method"), "CHECKOUT")
@@ -108,7 +122,8 @@ def verify_checkout(db: Session, user: User, payment_id: uuid.UUID, order_id: st
 
 def handle_webhook(db: Session, raw_body: bytes, signature: str | None, event_id: str | None) -> str:
     """Signed, idempotent webhook. Returns a short outcome string; raises AppError(400) only for a bad signature or body."""
-    rz.require_enabled()
+    if not get_settings().razorpay_webhook_secret:  # the webhook needs only its own secret; API key validity is irrelevant to verifying a signature
+        raise AppError("Webhook secret not configured: set RAZORPAY_WEBHOOK_SECRET in backend/.env and restart", 503)
     if not rz.verify_webhook_signature(raw_body, signature):
         raise AppError("Invalid webhook signature", 400)
     try:
@@ -134,11 +149,23 @@ def handle_webhook(db: Session, raw_body: bytes, signature: str | None, event_id
         if int(entity.get("amount", -1)) != paise(p.amount):
             _log(db, p, "AMOUNT_MISMATCH", p.status.value, f"Webhook amount {entity.get('amount')} != expected {paise(p.amount)}; not credited", rp_id)
             return "amount mismatch"
+        was_settled = p.status == PS.SUCCESS
         try:
             _apply_captured(db, p, rp_id or "", entity.get("method"), "WEBHOOK")
         except AppError:
             return "captured but rejected"
-        return "applied"
+        return "already settled" if was_settled else "applied"
+    if etype == "payment.authorized" and p.status == PS.PENDING:
+        if int(entity.get("amount", -1)) != paise(p.amount):
+            _log(db, p, "AMOUNT_MISMATCH", p.status.value, f"Webhook amount {entity.get('amount')} != expected {paise(p.amount)}; not captured", rp_id)
+            return "amount mismatch"
+        if _capture(db, p, rp_id or "") is None:
+            return "authorized, capture failed"
+        try:
+            _apply_captured(db, p, rp_id or "", entity.get("method"), "WEBHOOK")
+        except AppError:
+            return "captured but rejected"
+        return "captured and applied"
     if etype == "payment.failed" and p.status == PS.PENDING:
         p.status = PS.FAILED
         _log(db, p, "FAILED", "FAILED", entity.get("error_description") or "Razorpay reports the payment failed", rp_id)

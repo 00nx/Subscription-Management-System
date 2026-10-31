@@ -32,8 +32,8 @@ from app.schemas.common import ApiResponse, ErrorResponse, PageParams
 
 reports_router = APIRouter(prefix="/reports", tags=["reports"])
 _errors = {401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}}
-_staff = require_roles(UserRole.ADMIN, UserRole.STAFF)
-_admin = require_roles(UserRole.ADMIN)
+_staff = require_roles(UserRole.ADMIN, UserRole.STAFF)  # staff: operational reports
+_admin = require_roles(UserRole.ADMIN)  # revenue reports are admin-only
 CSV_LIMIT = 50_000
 
 

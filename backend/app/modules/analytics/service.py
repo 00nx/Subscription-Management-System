@@ -138,8 +138,8 @@ def mrr(db: Session, as_of: datetime | None = None, f: Filters = NO_FILTERS) -> 
                          func.row_number().over(partition_by=SubscriptionEvent.subscription_id, order_by=SubscriptionEvent.created_at.desc()).label("rn"))
                   .where(SubscriptionEvent.event_type.in_(["ACTIVATED", "RESUMED", "RENEWED", "PAUSED", "CLOSED", "AUTO_EXPIRED"]),
                          SubscriptionEvent.created_at <= as_of,
-                         *([exists().where(Subscription.id == SubscriptionEvent.subscription_id, *f.sub(False))] if f.sub(False) else [])).subquery())
-        latest = select(ranked.c.subscription_id, ranked.c.event_type).where(ranked.c.rn == 1).subquery()
+                         *([exists().where(Subscription.id == SubscriptionEvent.subscription_id, *f.sub(False))] if f.sub(False) else [])).subquery())  # rank only the filtered subscriptions' events
+        latest = select(ranked.c.subscription_id, ranked.c.event_type).where(ranked.c.rn == 1).subquery()  # newest state-changing event per subscription
         rows = db.execute(select(Subscription.billing_frequency, func.sum(SubscriptionLine.unit_price * SubscriptionLine.quantity))
                           .join(SubscriptionLine, SubscriptionLine.subscription_id == Subscription.id)
                           .join(latest, latest.c.subscription_id == Subscription.id)

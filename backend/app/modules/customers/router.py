@@ -52,7 +52,7 @@ def list_customers(page: PageParams = Depends(), q: str | None = Query(None, max
                               func.lower(func.coalesce(CustomerProfile.company_name, "")).like(like),
                               func.lower(CustomerProfile.customer_number).like(like)))
     if is_active is not None:
-        stmt = stmt.where(User.is_active != is_active)
+        stmt = stmt.where(User.is_active == is_active)
     return ApiResponse(data=paginate(db, stmt, page, CustomerOut, {**_SORTS, "full_name": User.full_name}, "-created_at"))
 
 

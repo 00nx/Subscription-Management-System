@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 from app.core.security import password_problems
 from app.modules.accounts.models import UserRole
@@ -17,16 +17,15 @@ class RegisterIn(BaseModel):
     email: EmailStr
     password: str = Field(max_length=128)
     full_name: str = Field(min_length=1, max_length=255)
+    confirm_password: str | None = Field(default=None, max_length=128)  # checked only when sent
 
     _pw = field_validator("password")(_check_password)
 
-    @field_validator("full_name")
-    @classmethod
-    def _validate_full_name(cls, v: str) -> str:
-        cleaned = v.strip()
-        if not cleaned:
-            raise ValueError("Full name cannot be blank")
-        return cleaned
+    @model_validator(mode="after")
+    def _match(self):
+        if self.confirm_password is not None and self.confirm_password != self.password:
+            raise ValueError("Passwords do not match")
+        return self
 
 
 class UserCreateIn(RegisterIn):
@@ -44,6 +43,40 @@ class PasswordResetIn(BaseModel):
     email: EmailStr
 
 
+class PasswordResetConfirmIn(BaseModel):
+    token: str = Field(min_length=10, max_length=200)
+    new_password: str = Field(max_length=128)
+
+    _pw = field_validator("new_password")(_check_password)
+
+
+class ChangePasswordIn(BaseModel):
+    current_password: str = Field(max_length=128)
+    new_password: str = Field(max_length=128)
+
+    _pw = field_validator("new_password")(_check_password)
+
+
+class UserUpdateIn(BaseModel):
+    full_name: str | None = Field(default=None, min_length=1, max_length=255)
+    role: UserRole | None = None
+    is_active: bool | None = None
+    can_manage_discounts: bool | None = None
+
+
+class NotificationOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    type: str
+    title: str
+    message: str
+    entity_type: str | None
+    entity_id: str | None
+    read_at: datetime | None
+    created_at: datetime
+
+
 class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -52,6 +85,8 @@ class UserOut(BaseModel):
     full_name: str
     role: UserRole
     is_active: bool
+    can_manage_discounts: bool = False
+    locked_until: datetime | None = None
     created_at: datetime
 
 

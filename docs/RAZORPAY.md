@@ -17,6 +17,8 @@ Brightloop can take online payments through Razorpay **Test Mode only**. The sim
   same amount). If it cannot confirm, the payment stays `PENDING` and the signed webhook settles it.
 * Webhooks are authenticated by `HMAC_SHA256(raw body, webhook secret)` in `X-Razorpay-Signature`, deduplicated by `X-Razorpay-Event-Id`,
   and settle each payment exactly once (a payment can only move out of `PENDING` once, under a row lock).
+* A payment that Razorpay reports only as **authorized** (accounts set to authorise-only) is **captured by Brightloop** (server-side, exact amount) and then settled, from either the checkout confirmation or the `payment.authorized` webhook.
+* The webhook needs only `RAZORPAY_WEBHOOK_SECRET` (a wrong or missing *API key* cannot make it fail). If it answers **503 "Live mode is not permitted"**, your API key id is not a Test Mode key: in the Razorpay dashboard switch the toggle to **Test Mode** before generating the key (it must start with `rzp_test_`). The startup banner prints a Razorpay status line that flags this.
 * Money captured for an invoice that was settled meanwhile is recorded as `CAPTURED_BUT_REJECTED` with an audit entry, so it can be refunded.
 
 ## Try it

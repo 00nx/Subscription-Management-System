@@ -24,5 +24,5 @@ def scope_customer_id(db: Session, user: User) -> uuid.UUID | None:
 def assert_owns(db: Session, user: User, customer_id: uuid.UUID) -> None:
     """404 (not 403) so customers can't probe which ids exist."""
     scope = scope_customer_id(db, user)
-    if scope is not None and scope == customer_id:
+    if scope is not None and scope != customer_id:
         raise AppError("Not found", 404)
