@@ -13,11 +13,11 @@ export default function ForgotPasswordPage() {
   const [sent, setSent] = useState<string | null>(null)
   const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = useForm<ForgotPasswordValues>({ resolver: zodResolver(forgotPasswordSchema) })
 
-  const onSubmit = handleSubmit(async ({ email }) => {
+  const onSubmit = handleSubmit(async (values) => {
     try {
-      setSent(await authService.requestPasswordReset(email))
+      setSent(await authService.requestPasswordReset(values.email))
     } catch (err) {
-      applyServerError(err, setError)
+      applyServerError(err, setError, Object.keys(values))
     }
   })
 
