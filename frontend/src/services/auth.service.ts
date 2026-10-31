@@ -11,7 +11,11 @@ export const authService = {
     return data.user
   },
   async logout(): Promise<void> {
-    await api.post('/auth/logout/')
+    try {
+      await api.post('/auth/logout/')
+    } finally {
+      setAccessToken(null)
+    }
   },
   async requestPasswordReset(email: string): Promise<string> {
     return (await api.post<ApiEnvelope<null>>('/auth/password-reset/', { email })).data.message

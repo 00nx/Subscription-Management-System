@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { FormField } from '@/components/shared/FormField'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/hooks/useAuth'
+import { homeFor } from '@/routes/nav'
 import { AuthLayout } from './AuthLayout'
 import { loginSchema, type LoginValues } from './schemas'
 import { applyServerError } from './useServerErrors'
@@ -16,8 +17,8 @@ export default function LoginPage() {
 
   const onSubmit = handleSubmit(async (values) => {
     try {
-      await login(values)
-      navigate(from ?? '/dashboard', { replace: true })
+      const user = await login(values)
+      navigate(from ?? homeFor(user.role), { replace: true })
     } catch (err) {
       applyServerError(err, setError)
     }

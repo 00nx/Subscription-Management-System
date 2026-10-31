@@ -16,7 +16,7 @@ const PAGE_SIZE = 10
 export default function UsersPage() {
   const [page, setPage] = useState(1)
   const params = { page, page_size: PAGE_SIZE }
-  const { data, isLoading, error, refetch } = useQuery({ queryKey: queryKeys.users.all, queryFn: () => userService.list(params) })
+  const { data, isLoading, error, refetch } = useQuery({ queryKey: queryKeys.users.list(params), queryFn: () => userService.list(params) })
 
   return (
     <PageContainer>

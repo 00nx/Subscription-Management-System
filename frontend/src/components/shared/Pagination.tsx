@@ -8,7 +8,7 @@ export function Pagination({ page, pageSize, total, onPageChange }: { page: numb
       <span>Page {page} of {pages} · {total} total</span>
       <div className="flex gap-2">
         <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => onPageChange(page - 1)}><ChevronLeft className="h-4 w-4" aria-hidden />Previous</Button>
-        <Button variant="outline" size="sm" disabled={page > pages} onClick={() => onPageChange(page + 1)}>Next<ChevronRight className="h-4 w-4" aria-hidden /></Button>
+        <Button variant="outline" size="sm" disabled={page >= pages} onClick={() => onPageChange(page + 1)}>Next<ChevronRight className="h-4 w-4" aria-hidden /></Button>
       </div>
     </nav>
   )

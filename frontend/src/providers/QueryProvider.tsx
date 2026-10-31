@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { ApiError } from '@/services/api'
 import { useState, type ReactNode } from 'react'
 
 export const makeQueryClient = () =>
@@ -7,7 +8,7 @@ export const makeQueryClient = () =>
       queries: {
         staleTime: 30_000,
         refetchOnWindowFocus: true,
-        retry: (count) => count < 2,
+        retry: (count, err) => !(err instanceof ApiError && err.status >= 400 && err.status < 500) && count < 2,
       },
     },
   })
