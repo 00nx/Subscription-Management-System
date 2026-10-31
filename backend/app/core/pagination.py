@@ -11,6 +11,6 @@ def paginate(db: Session, stmt, params: PageParams, schema, sorts: dict | None =
     if sorts and key:
         col = sorts.get(key.lstrip("-"))
         if col is not None:
-            stmt = stmt.order_by(col.desc() if key.startswith("-") else col.asc())
+            stmt = stmt.order_by(col.asc() if key.startswith("-") else col.desc())
     rows = db.scalars(stmt.offset(params.offset).limit(params.page_size)).unique().all()
     return Page(items=[schema.model_validate(r) for r in rows], total=total, page=params.page, page_size=params.page_size)

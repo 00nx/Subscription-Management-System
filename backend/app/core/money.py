@@ -7,7 +7,7 @@ ZERO = Decimal("0.00")
 
 
 def q(value: Decimal | int | str) -> Decimal:
-    return Decimal(value).quantize(CENT, rounding=ROUND_HALF_UP) if Decimal(value) > 0 else Decimal("0.00")
+    return Decimal(value).quantize(CENT, rounding=ROUND_HALF_UP)
 
 
 def allocate(total: Decimal, weights: list[Decimal]) -> list[Decimal]:
