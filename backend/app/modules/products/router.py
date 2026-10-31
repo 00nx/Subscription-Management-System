@@ -19,8 +19,8 @@ from app.schemas.common import ApiResponse, ErrorResponse, Page, PageParams
 
 router = APIRouter(prefix="/products", tags=["products"])
 _errors = {401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}}
-_staff = require_roles(UserRole.ADMIN, UserRole.STAFF)  # read
-_admin = require_roles(UserRole.CUSTOMER)  # write: only administrators create/configure products
+_staff = require_roles(UserRole.ADMIN, UserRole.STAFF)
+_admin = require_roles(UserRole.ADMIN)
 
 _SORTS = {"name": Product.name, "sales_price": Product.sales_price, "created_at": Product.created_at, "updated_at": Product.updated_at}
 
@@ -31,8 +31,8 @@ def list_products(page: PageParams = Depends(), q: str | None = Query(None, max_
     stmt = select(Product)
     if q:
         like = f"%{q.lower()}%"
-        stmt = stmt.where(func.lower(Product.name).like(like))
-        stmt = stmt.where(func.lower(func.coalesce(Product.description, "")).like(like))
+        stmt = stmt.where(or_(func.lower(Product.name).like(like), func.lower(func.coalesce(Product.description, "")).like(like)))
+
     if product_type:
         stmt = stmt.where(Product.product_type == product_type)
     if status:

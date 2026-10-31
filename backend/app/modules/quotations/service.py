@@ -76,15 +76,15 @@ def _compute(db: Session, qt: Quotation, lines: list[dict]) -> None:
     if d and discounts.is_eligible(d, dl, qt.issue_date):
         disc = discounts.compute(d, dl)
     sub = sum((x.subtotal for x in dl), ZERO)
-    tax = sum((tax_amount(x.subtotal + disc.get(x.key, ZERO), l.get("taxes"), l["tax_rate"]) for x, l in zip(dl, lines)), ZERO)
+    tax = sum((tax_amount(x.subtotal - disc.get(x.key, ZERO), l.get("taxes"), l["tax_rate"]) for x, l in zip(dl, lines)), ZERO)
     dtot = sum(disc.values(), ZERO)
-    qt.subtotal, qt.discount_total, qt.tax_total, qt.total = sub, dtot, tax, sub + dtot + tax
+    qt.subtotal, qt.discount_total, qt.tax_total, qt.total = sub, dtot, tax, sub - dtot + tax
     qt.lines = [QuotationLine(**l) for l in lines]
 
 
 def create_quotation(db: Session, data: QuotationIn, actor: User) -> Quotation:
     customer = db.get(CustomerProfile, data.customer_id)
-    if not customer or customer.is_active:
+    if not customer or not customer.is_active:
         raise AppError("Customer not found or inactive", 400)
     tpl = get_template(db, data.template_id) if data.template_id else None
     if tpl and tpl.status != RecordStatus.ACTIVE:

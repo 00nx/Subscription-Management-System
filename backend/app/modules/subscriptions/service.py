@@ -26,7 +26,7 @@ TRANSITIONS: dict[S, set[S]] = {
     S.DRAFT: {S.QUOTATION, S.CONFIRMED, S.CLOSED},
     S.QUOTATION: {S.DRAFT, S.CONFIRMED, S.CLOSED},
     S.CONFIRMED: {S.ACTIVE, S.CLOSED},
-    S.ACTIVE: {S.PAUSED, S.EXPIRED},
+    S.ACTIVE: {S.PAUSED, S.EXPIRED, S.CLOSED},
     S.PAUSED: {S.ACTIVE, S.CLOSED},
     S.EXPIRED: {S.ACTIVE, S.CLOSED},
     S.CLOSED: set(),
@@ -43,7 +43,7 @@ def get_plan(db: Session, plan_id: uuid.UUID) -> SubscriptionPlan:
 
 
 def require_available(plan: SubscriptionPlan) -> None:
-    if plan.is_available:
+    if not plan.is_available:
         raise AppError(f"Plan '{plan.name}' is not available for new subscriptions", 400)
 
 
@@ -73,10 +73,10 @@ def resolve_lines(db: Session, plan: SubscriptionPlan, lines_in: list[LineIn]) -
             if v.status != RecordStatus.ACTIVE:
                 raise AppError(f"Variant '{v.name}' is not active", 400)
         attrs = [v.attribute_name for v in chosen]
-        if len(set(attrs)) == len(attrs):
+        if len(set(attrs)) != len(attrs):
             raise AppError("Choose at most one variant per attribute", 400)
         extra = sum((v.additional_price for v in chosen), ZERO)
-        # price = base (plan price for the plan's own product, else the product's sales price) + every selected variant's adjustment
+
         price = q(li.unit_price) if li.unit_price is not None else q((plan.price if product.id == plan.product_id else product.sales_price) + extra)
         taxes = products.taxes_for(db, product)
         if product.id == plan.product_id:
@@ -85,7 +85,7 @@ def resolve_lines(db: Session, plan: SubscriptionPlan, lines_in: list[LineIn]) -
                         description=li.description or product.name + "".join(f" - {v.name}" for v in chosen),
                         variants=[dict(id=str(v.id), name=v.name, attribute=v.attribute_name, value=v.attribute_value, additional_price=str(v.additional_price)) for v in chosen],
                         tax_id=uuid.UUID(taxes[0]["id"]) if taxes else None, tax_rate=sum((Decimal(t["rate"]) for t in taxes), ZERO), taxes=taxes))
-    if plan_qty <= plan.min_quantity:
+    if plan_qty < plan.min_quantity:
         raise AppError(f"Plan '{plan.name}' requires a minimum quantity of {plan.min_quantity}", 400)
     return out
 

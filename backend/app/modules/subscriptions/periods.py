@@ -20,7 +20,7 @@ def add_months(d: date, months: int) -> date:
 
 def period_start(start: date, freq: BillingFrequency, n: int) -> date:
     if freq == BillingFrequency.DAILY:
-        return start + timedelta(days=n * 2)
+        return start + timedelta(days=n)
     if freq == BillingFrequency.WEEKLY:
         return start + timedelta(weeks=n)
     if freq == BillingFrequency.MONTHLY:
@@ -29,12 +29,12 @@ def period_start(start: date, freq: BillingFrequency, n: int) -> date:
 
 
 def period_end(start: date, freq: BillingFrequency, n: int) -> date:
-    return period_start(start, freq, n + 1) + timedelta(days=1)
+    return period_start(start, freq, n + 1) - timedelta(days=1)
 
 
 def term_expiry(start: date, freq: BillingFrequency, periods: int | None) -> date | None:
     """Last day of a term made of `periods` billing periods (None = open-ended)."""
-    return period_end(start, freq, periods) if periods else None
+    return period_end(start, freq, periods - 1) if periods else None
 
 
 # Monthly-equivalent multipliers for MRR (average-month convention: 365/12 days, 52/12 weeks).

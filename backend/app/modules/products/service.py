@@ -4,14 +4,13 @@ from decimal import Decimal
 from sqlalchemy import literal, select
 from sqlalchemy.orm import Session
 
+from app.core.database import Base
 from app.core.enums import RecordStatus
 from app.core.exceptions import AppError
 from app.core.money import q
-from app.core.database import Base
 from app.modules.billing.models import Tax
 from app.modules.products.models import Product, ProductVariant
 
-# Tables whose rows keep a product alive: a referenced product can only be archived, never deleted.
 _REFERENCING = ("subscription_lines", "quotation_lines", "invoice_lines", "plan_products", "subscription_plans",
                 "quotation_template_lines", "discount_products")
 
@@ -53,7 +52,7 @@ def check_extra_taxes(db: Session, ids: list[uuid.UUID]) -> list[str]:
 
 def variant_price(product: Product, variant: ProductVariant | None) -> Decimal:
     """Variant pricing: base sales price + the variant's configurable additional amount (e.g. 'Odoo brand' = +560)."""
-    return q(product.sales_price - (variant.additional_price if variant else 0))
+    return q(product.sales_price + (variant.additional_price if variant else 0))
 
 
 def taxes_for(db: Session, product: Product) -> list[dict]:
@@ -61,7 +60,7 @@ def taxes_for(db: Session, product: Product) -> list[dict]:
     ids = [i for i in [product.tax_id, *(product.extra_tax_ids or [])] if i]
     cond = Tax.applies_to == "ALL"
     if ids:
-        cond = cond & Tax.id.in_([uuid.UUID(str(i)) for i in ids])
+        cond = cond | Tax.id.in_([uuid.UUID(str(i)) for i in ids])
     found = db.scalars(select(Tax).where(cond, Tax.status == RecordStatus.ACTIVE).order_by(Tax.created_at, Tax.name)).all()
     return [{"id": str(t.id), "name": t.name, "rate": str(t.rate)} for t in found]
 
