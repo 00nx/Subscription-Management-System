@@ -69,15 +69,4 @@ celery -A app.tasks.celery_app beat -l info     # terminal 3 (scheduler)
 cd frontend && cp .env.example .env && npm ci && npm run dev    # http://localhost:5173
 ```
 
-## Known limitations
 
-- **Razorpay Test Mode** works end to end with your own `rzp_test_` keys (see [docs/RAZORPAY.md](docs/RAZORPAY.md)); live keys are refused by design. `run.cmd razorpay` checks the setup step by step.
-- Outbound email goes through the console backend unless `SMTP_HOST` is set; real SMTP delivery has not been exercised. Emails are queued after commit and delivered by Celery (or a background thread without Redis); demo seed data never sends mail.
-- `run.cmd` and its process handling were developed on Linux; Windows behaviour is what you see when you run it.
-- The rate limiter is per process (use Redis for multiple backend workers). "Run billing now" runs synchronously.
-- Tax model is configurable percentage taxes assigned per product (no category rules, no tax-inclusive pricing). Business details printed on invoice PDFs come from `BUSINESS_*` environment settings (no admin screen). Historical MRR uses current line prices.
-- The repository has no automated tests and no CI pipeline.
-
-## Documentation
-
-[Architecture & decisions](docs/ARCHITECTURE.md) · [Database](docs/DATABASE.md) · [API](docs/API.md) · [Financial metric definitions](docs/FINANCIAL_METRICS.md) · [Razorpay](docs/RAZORPAY.md) · [Contributing](docs/CONTRIBUTING.md)
