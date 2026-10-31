@@ -1,9 +1,14 @@
-from typing import Generic, TypeVar
+from decimal import Decimal
+from typing import Annotated, Generic, TypeVar
 
 from fastapi import Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 T = TypeVar("T")
+
+# Money in requests: Decimal, non-negative, at most 2 places (serialised as strings, e.g. "999.00")
+Money = Annotated[Decimal, Field(ge=0, max_digits=12, decimal_places=2)]
+Percent = Annotated[Decimal, Field(ge=0, le=100, max_digits=5, decimal_places=2)]
 
 
 class ApiResponse(BaseModel, Generic[T]):
@@ -26,8 +31,8 @@ class Page(BaseModel, Generic[T]):
 
 
 class PageParams:
-    def __init__(self, page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le=100)):
-        self.page, self.page_size = page, page_size
+    def __init__(self, page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le=100), sort: str | None = Query(None, max_length=50)):
+        self.page, self.page_size, self.sort = page, page_size, sort
 
     @property
     def offset(self) -> int:

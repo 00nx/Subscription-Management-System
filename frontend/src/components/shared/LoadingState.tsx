@@ -1,9 +1,12 @@
-import { Loader2 } from 'lucide-react'
+import { Skeleton } from '@/components/ui/skeleton'
 
-export function LoadingState({ label = 'Loading…' }: { label?: string }) {
+/** Skeleton placeholder shaped like a table, so the page does not jump when data arrives. The label is for screen readers. */
+export function LoadingState({ label = 'Loading…', rows = 5 }: { label?: string; rows?: number }) {
   return (
-    <div role="status" className="flex items-center justify-center gap-2 p-12 text-sm text-muted-foreground">
-      <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> {label}
+    <div role="status" aria-busy="true" className="space-y-3 p-6">
+      <span className="sr-only">{label}</span>
+      <Skeleton className="h-8 w-1/3" />
+      {Array.from({ length: rows }, (_, i) => <Skeleton key={i} className="h-10 w-full" />)}
     </div>
   )
 }

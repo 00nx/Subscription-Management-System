@@ -6,6 +6,7 @@ export interface User {
   full_name: string
   role: Role
   is_active: boolean
+  can_manage_discounts?: boolean
   created_at: string
 }
 
@@ -23,4 +24,5 @@ export interface LoginRequest {
 
 export interface RegisterRequest extends LoginRequest {
   full_name: string
+  confirm_password?: string
 }

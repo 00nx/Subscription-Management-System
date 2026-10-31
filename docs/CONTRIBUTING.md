@@ -1,43 +1,43 @@
 # Contributing
 
-## Four-member split
+## Module ownership (four members)
 
 | Member | Branch | Backend | Frontend |
 |---|---|---|---|
-| 1. Auth & users | `feature/authentication` | `modules/accounts`: registration, login, JWT, role permissions, user management | `features/auth`, `features/users`, profile |
-| 2. Products & subscriptions | `feature/products-subscriptions` | `modules/products`, `subscriptions`, `quotations` (products, variants, plans, subscriptions, quotations) | `features/products`, `plans`, `subscriptions`, `quotations` |
-| 3. Billing & payments | `feature/billing-payments` | `modules/billing`, `invoices`, `payments`, `discounts` (taxes live in billing) | `features/invoices`, `payments`, `discounts`, billing UI |
-| 4. Dashboard & integration | `feature/dashboard-analytics` | `modules/analytics`: reports, dashboard endpoints | `features/dashboard`, `reports`, charts, shared components, integration tests |
+| 1. Auth, users & customers | `feature/authentication` | `accounts`, `customers`: auth, JWT, roles, notifications, customer profiles | `features/auth`, `users`, `customers`, `notifications`, profile |
+| 2. Products, plans & subscriptions | `feature/products-subscriptions` | `products`, `subscriptions`, `quotations`: products/variants, plans, quotations, lifecycle, renewal/cancellation | `features/products`, `plans`, `subscriptions`, `quotations` |
+| 3. Billing & payments | `feature/billing-payments` | `billing`, `discounts`, `invoices`, `payments`, `tasks/billing_tasks.py` | `features/invoices`, `payments`, `discounts`, `billing`, invoice PDF |
+| 4. Dashboard & integration | `feature/dashboard-analytics` | `analytics`: dashboard, reports, audit log | `features/dashboard`, `reports`, `components/shared`, integration tests |
 
-Member 4 **coordinates** integration (keeps `develop` green, runs the cross-module tests, chairs contract discussions) but integration problems are fixed by the member who owns the failing code, not by Member 4 alone.
+Member 4 **coordinates** integration (keeps `develop` green, runs cross-module tests) but cross-module bugs are fixed by whoever owns the failing code. Everyone writes tests for their module and joins integration testing.
 
 ## Branching
 
-`main` (releasable) ← `develop` (integration) ← feature branches above (and short-lived `feature/<module>-<topic>` branches off them).
-Never push directly to `main` or `develop`; open a pull request. Feature branches should merge `develop` in regularly.
+`main` (releasable) ← `develop` (integration) ← feature branches above (and short-lived `feature/<module>-<topic>`). Never push to `main`/`develop` directly: open a pull request. Merge `develop` into your branch regularly.
 
-## Commits
+## Commits and PRs
 
-Conventional style: `feat(products): add variant model`, `fix(auth): reject expired refresh token`, `docs: ...`, `test: ...`, `chore: ...`. Scope = module. One logical change per commit.
+Conventional commits: `feat(billing): …`, `fix(auth): …`, `docs`, `test`, `chore`; scope = module. PRs target `develop`, stay focused, describe what/why, and need: a clean `npm run typecheck`; an Alembic migration you actually ran (`alembic upgrade head` on a fresh DB) when tables change; an updated `docs/API.md` section when endpoints change; one review (from another module's owner when you touch shared code).
 
-## Pull requests
+## Shared contracts
 
-- Target `develop`; small and focused; describe what and why; link the issue.
-- Must have passing backend (`pytest`) and frontend (`npm test`, `npm run typecheck`) checks, plus tests for new behaviour.
-- At least one review, from a member of a different module when you touch shared code.
-- New tables need an Alembic migration you have actually run (`alembic upgrade head` on a fresh DB).
-
-## Shared contracts and boundaries
-
-- Follow `docs/API.md` (envelope, pagination, auth). API shape changes are announced in the PR and update `docs/API.md`.
-- Stay inside your module. Changes to `core/`, `schemas/common.py`, `services/api.ts`, `components/ui` or `components/shared` need agreement from the others (shared-component changes go through Member 4).
-- Shared files you'll all touch (`api/v1/router.py`, `models/registry.py`, `routes/AppRoutes.tsx`, `routes/nav.ts`): add your lines only, keep them alphabetical or grouped by module to limit conflicts.
-- Money is `Decimal`/`NUMERIC`, never float.
+- **Money is `Decimal`/`NUMERIC(12,2)`, never float.** API money values are strings. Round with `app.core.money.q` (half-up).
+- Dates are UTC `DATE`/timestamptz. Status enums live in `app/core/enums.py`: don't redefine them.
+- Response envelope, pagination and error format: see `docs/API.md`. Use `ApiResponse`, `Page`, `PageParams`, `paginate`.
+- Authorisation: `Depends(require_roles(...))` / `get_current_user`. Customer-visible data must filter through `scope_customer_id`/`assert_owns`. Never trust a client-provided role, user id, customer id or payment status.
+- Financial writes: one transaction, row locks where concurrent (`with_for_update`), idempotent where retried. Write an audit row (`record_audit`) for important changes; never log secrets.
+- Shared files you will all touch (`api/v1/router.py`, `models/registry.py`, `routes/AppRoutes.tsx`, `routes/nav.ts`): add only your lines to limit conflicts. Changes to `core/`, `schemas/common.py`, `services/api.ts`, `components/ui` or `components/shared` need agreement from the others.
 
 ## Resolving merge conflicts
 
-1. `git fetch origin && git checkout feature/yours && git merge origin/develop` (merge, don't rebase a shared branch).
-2. Open each conflicted file; keep **both** sides' intent (typically both added lines in a shared router/registry). Never resolve by discarding the other person's change without talking to them.
-3. Alembic: two heads is a conflict too. Run `alembic heads`; if there are two, `alembic merge -m "merge heads" <rev1> <rev2>` and commit the result. Never edit an already-merged migration.
-4. `package-lock.json`: take `develop`'s version, then re-run `npm install` and commit.
-5. Run the backend and frontend tests before pushing the merge. If the conflict is in someone else's module, ask them to confirm.
+1. `git fetch origin && git checkout feature/yours && git merge origin/develop` (merge; don't rebase shared branches).
+2. Keep **both** sides' intent in shared routers/registries. Never discard someone's change without talking to them.
+3. Alembic: two heads is a conflict. `alembic heads`; if two, `alembic merge -m "merge heads" <rev1> <rev2>` and commit. Never edit an already-merged migration.
+4. `package-lock.json`: take `develop`'s, run `npm install`, commit.
+5. Re-run backend and frontend tests before pushing the merge.
+
+## Running the checks
+
+```bash
+cd frontend && npm test && npm run typecheck
+```

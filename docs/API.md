@@ -1,50 +1,242 @@
 # API
 
-Base path `/api/v1/`. Interactive docs: `/docs` (Swagger), `/redoc`; schema: `/openapi.json`. Paths end with `/`.
+Base path `/api/v1/`. Interactive docs: `/docs` (Swagger), `/redoc`; schema `/openapi.json`. Paths end with `/`. **98 operations.**
+Request/response schemas, filters and status codes are in the OpenAPI document (the source of truth); this page explains the conventions.
 
-## Response envelope
+## Response envelope and errors
 
 ```json
 { "success": true,  "message": "Request successful", "data": {} }
 { "success": false, "message": "Validation failed", "errors": { "password": ["Password must contain an uppercase letter"] } }
 ```
 
-Status codes: 200/201 success · 401 not authenticated · 403 forbidden (role, CSRF) · 409 conflict (duplicate email) · 422 validation · 429 rate limited · 500 unexpected (generic message; details only in server logs).
+401 not authenticated · 403 forbidden (role, CSRF) · 404 not found (also used for other people's records) · 409 conflict (duplicate, invalid state transition) · 422 validation (or a business rule such as overpayment) · 429 rate limited · 500 generic message (details only in logs).
+Money is a **decimal string** (`"999.00"`); never a float.
 
-Pagination: query `?page=1&page_size=20` (page ≥ 1, page_size 1–100). Response `data` is `{ "items": [], "total": 0, "page": 1, "page_size": 20 }`.
+**Pagination:** `?page=1&page_size=20` (page ≥ 1, page_size 1-100) → `data = {items, total, page, page_size}`. **Sorting:** `?sort=field` / `?sort=-field` (whitelisted per endpoint). **Search/filter:** `q`, `status`, date ranges, etc. per endpoint.
 
 ## Authentication
 
-1. **Login** returns a short-lived JWT access token (15 min, in the JSON body) and sets two cookies:
-   - `refresh_token`: opaque random string, `HttpOnly`, `SameSite=Lax`, `Secure` when `COOKIE_SECURE=true`, path `/api/v1/auth`, 7 days.
-   - `csrf_token`: random, readable by JS, path `/`.
-2. The SPA keeps the access token **in memory only** and sends `Authorization: Bearer <token>`.
-3. On 401, or on page load, the SPA calls **refresh** with `X-CSRF-Token` equal to the `csrf_token` cookie (double-submit CSRF check; mismatched/missing → 403). The refresh token is **rotated**: the old one is revoked, a new one set.
-4. Only the SHA-256 of each refresh token is stored. If an already-rotated token is presented again (replay/theft), the entire token family is revoked.
-5. **Logout** (also CSRF-checked) revokes the family and clears cookies.
-6. Roles are read from the database on every request, not from token claims, so demotion or deactivation takes effect immediately.
+1. `POST /auth/login/` returns a 15-minute JWT access token (body) and sets two cookies: `refresh_token` (opaque, **HttpOnly**, `SameSite=Lax`, `Secure` when `COOKIE_SECURE=true`, path `/api/v1/auth`, 7 days) and `csrf_token` (readable by JS).
+2. The SPA keeps the access token in memory and sends `Authorization: Bearer`.
+3. On 401, or on page load, `POST /auth/refresh/` with `X-CSRF-Token` equal to the cookie (double-submit; mismatch → 403). The refresh token **rotates**; reusing a rotated token revokes the whole family. Only SHA-256 hashes are stored.
+4. `POST /auth/logout/` (CSRF-checked) revokes the family. Changing or resetting a password revokes all sessions.
+5. **Password reset:** `POST /auth/password-reset/` always answers identically, emails a 1-hour single-use link to `{FRONTEND_URL}/reset-password?token=…` (SMTP via env; **without `SMTP_HOST` the email is written to the backend log** for development). `POST /auth/password-reset/confirm/` sets the new password.
+6. Roles are read from the database on every request (demotion is immediate). Register always creates a CUSTOMER; only an ADMIN can create STAFF/ADMIN (`POST /users/`).
+7. Rate limits (per IP, per path): login/register/reset 10/min, refresh 60/min (`RATE_LIMIT_*` env).
 
-Limitations: the CSRF cookie is readable by JS on the API's host, so the SPA and API must share a site (e.g. `localhost` or `app.example.com` + `api.example.com`). The rate limiter is per process (see `core/ratelimit.py`).
+Password rules (backend authoritative, mirrored in the form): more than 8 characters, an uppercase, a lowercase, a special character.
 
-Password rules: more than 8 characters, one uppercase, one lowercase, one special character. Enforced by the backend (and mirrored in the frontend form).
+## Permissions
+
+| Area | ADMIN | STAFF | CUSTOMER |
+|---|---|---|---|
+| Users (list/create/update roles) | yes | no | no |
+| Customers | all | all (read/update) | own profile (`/customers/me/`) |
+| Products, variants, plans, taxes | write | read | plans: only those open for subscription |
+| Discounts | write | read | no |
+| Quotations / templates | all | all | view own (non-draft) |
+| Subscriptions | all | all | view own (non-draft); **requests** for cancel/pause/resume |
+| Invoices | all | all | own, non-draft; PDF; pay |
+| Payments | record + view | record + view | own; initiate/complete via gateway |
+| Billing run / failures | run + view | view due/failures | no |
+| Dashboard / reports | all | operational only (no MRR/ARR/revenue, no revenue report) | no |
+| Audit log | read | no | no |
+| Notifications | own | own | own |
+
+Customer ownership is enforced server-side (`scope_customer_id`): a client-supplied `customer_id` is ignored for customers, and other people's records return 404.
 
 ## Endpoints
 
-| Method & path | Auth | Description |
-|---|---|---|
-| `GET /health/` | none | `{database, redis}` status; 503 if either is down |
-| `POST /health/celery/` | ADMIN | Enqueues the sample Celery task and waits for `"pong"` |
-| `POST /auth/register/` | none, rate limited | Creates a **CUSTOMER** (role in payload ignored). 201 |
-| `POST /auth/login/` | none, rate limited | Body `{email, password}` → `{access_token, token_type, expires_in, user}` + cookies |
-| `POST /auth/refresh/` | refresh cookie + `X-CSRF-Token` | Rotates refresh token, returns same shape as login |
-| `POST /auth/logout/` | refresh cookie + `X-CSRF-Token` | Revokes token family |
-| `POST /auth/password-reset/` | none, rate limited | Always returns the same message; **no email is sent yet** (Phase 2) |
-| `GET /auth/me/` | any user | Current user |
-| `GET /users/` | ADMIN, STAFF | Paginated users |
-| `POST /users/` | ADMIN | Create a user with a chosen role (the only way to create STAFF/ADMIN) |
+### analytics
 
-Authorization matrix: customers only ever reach their own data (customer-scoped subscription/invoice endpoints must filter by `current_user.id`; use `Depends(get_current_user)` and `require_roles(...)` from `app/core/dependencies.py`). Staff have limited operational access; admins have everything.
+| Method | Path |
+|---|---|
+| `GET` | `/api/v1/analytics/dashboard/` |
+| `GET` | `/api/v1/analytics/payments/` |
+| `GET` | `/api/v1/analytics/revenue/` |
+| `GET` | `/api/v1/analytics/subscriptions/` |
 
-## Adding an endpoint
+### audit-logs
 
-Put the router in your module, return `ApiResponse[...]`, declare `responses` for 401/403, protect with `require_roles`, include it in `api/v1/router.py`.
+| Method | Path |
+|---|---|
+| `GET` | `/api/v1/audit-logs/` |
+
+### auth
+
+| Method | Path |
+|---|---|
+| `POST` | `/api/v1/auth/change-password/` |
+| `POST` | `/api/v1/auth/login/` |
+| `POST` | `/api/v1/auth/logout/` |
+| `GET` | `/api/v1/auth/me/` |
+| `POST` | `/api/v1/auth/password-reset/` |
+| `POST` | `/api/v1/auth/password-reset/confirm/` |
+| `POST` | `/api/v1/auth/refresh/` |
+| `POST` | `/api/v1/auth/register/` |
+
+### billing
+
+| Method | Path |
+|---|---|
+| `GET` | `/api/v1/billing/due/` |
+| `GET` | `/api/v1/billing/failures/` |
+| `POST` | `/api/v1/billing/run/` |
+
+### customers
+
+| Method | Path |
+|---|---|
+| `GET` | `/api/v1/customers/` |
+| `GET` | `/api/v1/customers/me/` |
+| `PATCH` | `/api/v1/customers/me/` |
+| `GET` | `/api/v1/customers/me/summary/` |
+| `GET` | `/api/v1/customers/{customer_id}/` |
+| `PATCH` | `/api/v1/customers/{customer_id}/` |
+
+### discounts
+
+| Method | Path |
+|---|---|
+| `GET` | `/api/v1/discounts/` |
+| `POST` | `/api/v1/discounts/` |
+| `GET` | `/api/v1/discounts/{discount_id}/` |
+| `PATCH` | `/api/v1/discounts/{discount_id}/` |
+| `GET` | `/api/v1/discounts/{discount_id}/usages/` |
+
+### health
+
+| Method | Path |
+|---|---|
+| `GET` | `/api/v1/health/` |
+| `POST` | `/api/v1/health/celery/` |
+
+### invoices
+
+| Method | Path |
+|---|---|
+| `GET` | `/api/v1/invoices/` |
+| `POST` | `/api/v1/invoices/` |
+| `GET` | `/api/v1/invoices/{invoice_id}/` |
+| `POST` | `/api/v1/invoices/{invoice_id}/cancel/` |
+| `POST` | `/api/v1/invoices/{invoice_id}/confirm/` |
+| `GET` | `/api/v1/invoices/{invoice_id}/pdf/` |
+| `POST` | `/api/v1/invoices/{invoice_id}/send/` |
+
+### notifications
+
+| Method | Path |
+|---|---|
+| `GET` | `/api/v1/notifications/` |
+| `POST` | `/api/v1/notifications/read-all/` |
+| `GET` | `/api/v1/notifications/unread-count/` |
+| `POST` | `/api/v1/notifications/{notification_id}/read/` |
+
+### payments
+
+| Method | Path |
+|---|---|
+| `GET` | `/api/v1/payments/` |
+| `POST` | `/api/v1/payments/` |
+| `POST` | `/api/v1/payments/initiate/` |
+| `GET` | `/api/v1/payments/{payment_id}/` |
+| `POST` | `/api/v1/payments/{payment_id}/simulate/` |
+| `GET` | `/api/v1/payments/{payment_id}/status/` |
+
+### plans
+
+| Method | Path |
+|---|---|
+| `GET` | `/api/v1/plans/` |
+| `POST` | `/api/v1/plans/` |
+| `GET` | `/api/v1/plans/{plan_id}/` |
+| `PATCH` | `/api/v1/plans/{plan_id}/` |
+
+### products
+
+| Method | Path |
+|---|---|
+| `GET` | `/api/v1/products/` |
+| `POST` | `/api/v1/products/` |
+| `GET` | `/api/v1/products/{product_id}/` |
+| `PATCH` | `/api/v1/products/{product_id}/` |
+| `DELETE` | `/api/v1/products/{product_id}/` |
+| `POST` | `/api/v1/products/{product_id}/archive/` |
+| `GET` | `/api/v1/products/{product_id}/variants/` |
+| `POST` | `/api/v1/products/{product_id}/variants/` |
+| `PATCH` | `/api/v1/products/{product_id}/variants/{variant_id}/` |
+| `DELETE` | `/api/v1/products/{product_id}/variants/{variant_id}/` |
+
+### quotation-templates
+
+| Method | Path |
+|---|---|
+| `GET` | `/api/v1/quotation-templates/` |
+| `POST` | `/api/v1/quotation-templates/` |
+| `GET` | `/api/v1/quotation-templates/{template_id}/` |
+| `PATCH` | `/api/v1/quotation-templates/{template_id}/` |
+
+### quotations
+
+| Method | Path |
+|---|---|
+| `GET` | `/api/v1/quotations/` |
+| `POST` | `/api/v1/quotations/` |
+| `GET` | `/api/v1/quotations/{qid}/` |
+| `PATCH` | `/api/v1/quotations/{qid}/` |
+| `POST` | `/api/v1/quotations/{qid}/confirm/` |
+| `POST` | `/api/v1/quotations/{qid}/convert/` |
+| `POST` | `/api/v1/quotations/{qid}/send/` |
+
+### reports
+
+| Method | Path |
+|---|---|
+| `GET` | `/api/v1/reports/invoices/` |
+| `GET` | `/api/v1/reports/payments/` |
+| `GET` | `/api/v1/reports/revenue/` |
+| `GET` | `/api/v1/reports/subscriptions/` |
+
+### subscription-requests
+
+| Method | Path |
+|---|---|
+| `GET` | `/api/v1/subscription-requests/` |
+| `POST` | `/api/v1/subscription-requests/{req_id}/approve/` |
+| `POST` | `/api/v1/subscription-requests/{req_id}/reject/` |
+
+### subscriptions
+
+| Method | Path |
+|---|---|
+| `GET` | `/api/v1/subscriptions/` |
+| `POST` | `/api/v1/subscriptions/` |
+| `GET` | `/api/v1/subscriptions/{sub_id}/` |
+| `PATCH` | `/api/v1/subscriptions/{sub_id}/` |
+| `POST` | `/api/v1/subscriptions/{sub_id}/activate/` |
+| `POST` | `/api/v1/subscriptions/{sub_id}/cancel/` |
+| `POST` | `/api/v1/subscriptions/{sub_id}/confirm/` |
+| `GET` | `/api/v1/subscriptions/{sub_id}/events/` |
+| `POST` | `/api/v1/subscriptions/{sub_id}/pause/` |
+| `POST` | `/api/v1/subscriptions/{sub_id}/renew/` |
+| `POST` | `/api/v1/subscriptions/{sub_id}/requests/` |
+| `POST` | `/api/v1/subscriptions/{sub_id}/resume/` |
+
+### taxes
+
+| Method | Path |
+|---|---|
+| `GET` | `/api/v1/taxes/` |
+| `POST` | `/api/v1/taxes/` |
+| `GET` | `/api/v1/taxes/{tax_id}/` |
+| `PATCH` | `/api/v1/taxes/{tax_id}/` |
+
+### users
+
+| Method | Path |
+|---|---|
+| `GET` | `/api/v1/users/` |
+| `POST` | `/api/v1/users/` |
+| `GET` | `/api/v1/users/{user_id}/` |
+| `PATCH` | `/api/v1/users/{user_id}/` |

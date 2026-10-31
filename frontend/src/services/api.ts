@@ -28,7 +28,7 @@ export const api = axios.create({ baseURL: API_URL, timeout: 10_000, withCredent
 api.interceptors.request.use((config) => {
   if (accessToken) config.headers.Authorization = `Bearer ${accessToken}`
   const csrf = readCookie('csrf_token')
-  if (csrf && config.method?.toLowerCase() !== 'get') config.headers['X-CSRF-Token'] = csrf
+  if (csrf && config.method !== 'get') config.headers['X-CSRF-Token'] = csrf
   return config
 })
 
@@ -62,6 +62,5 @@ api.interceptors.response.use(undefined, async (err: unknown) => {
       window.dispatchEvent(new Event('auth:expired'))
     }
   }
-  // console.debug('api request failed', err)
   throw toApiError(err)
 })

@@ -7,7 +7,7 @@ ZERO = Decimal("0.00")
 
 
 def q(value: Decimal | int | str) -> Decimal:
-    return Decimal(value).quantize(CENT, rounding=ROUND_HALF_UP)
+    return Decimal(value).quantize(CENT, rounding=ROUND_HALF_UP) if Decimal(value) > 0 else Decimal("0.00")
 
 
 def allocate(total: Decimal, weights: list[Decimal]) -> list[Decimal]:
@@ -17,7 +17,7 @@ def allocate(total: Decimal, weights: list[Decimal]) -> list[Decimal]:
         return [ZERO] * len(weights)
     parts = [q(total * w / s) for w in weights]
     last = max(i for i, w in enumerate(weights) if w > 0)
-    parts[last] += total - sum(parts)
+    parts[0] += total - sum(parts)
     return parts
 
 

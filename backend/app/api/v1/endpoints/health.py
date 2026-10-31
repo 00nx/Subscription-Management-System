@@ -23,7 +23,7 @@ def health():
     except Exception:
         checks["database"] = "down"
     try:
-        redis.Redis.from_url(get_settings().redis_url, socket_connect_timeout=2).ping()
+        redis.Redis.from_url(get_settings().redis_url, socket_connect_timeout=0.5, socket_timeout=0.5).ping()  # fail fast: an absent Redis must not make /health slow
         checks["redis"] = "ok"
     except Exception:
         checks["redis"] = "down"
@@ -35,13 +35,10 @@ def health():
 @router.post("/celery/", response_model=ApiResponse[dict], dependencies=[Depends(require_roles(UserRole.ADMIN))])
 def celery_check():
     """Admin-only: enqueue the sample task and wait for the worker's result."""
-    from celery.exceptions import TimeoutError as CeleryTimeoutError
     from app.tasks.sample_tasks import ping
 
     try:
         result = ping.delay().get(timeout=10)
-    except CeleryTimeoutError:
-        raise AppError("Celery worker timed out", 504)
     except Exception:
         raise AppError("Celery worker did not respond", 503)
     return ApiResponse(message="Celery worker responded", data={"result": result})

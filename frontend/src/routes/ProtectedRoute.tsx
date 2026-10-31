@@ -9,7 +9,7 @@ export function ProtectedRoute({ roles }: { roles?: Role[] }) {
   const { user, isLoading } = useAuth()
   const location = useLocation()
   if (isLoading) return <LoadingState />
-  if (!user) return <Navigate to="/login" state={{ from: location.pathname + location.search }} replace />
+  if (!user) return <Navigate to="/login" state={{ from: location.pathname }} replace />
   if (roles && !roles.includes(user.role)) return <Navigate to="/unauthorized" replace />
   return <Outlet />
 }
