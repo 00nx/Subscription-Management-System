@@ -35,14 +35,14 @@ def build_invoice(db: Session, customer: CustomerProfile, lines: list[dict], *, 
     inv = Invoice(number=next_number(db, "invoice_number_seq", "INV"), customer_id=customer.id, customer_snapshot=snapshot_customer(customer),
                   subscription_id=subscription.id if subscription else None, subscription_number=subscription.number if subscription else None,
                   status=status, source=source, period_start=period_start, period_end=period_end, issue_date=issue_date,
-                  due_date=issue_date - timedelta(days=payment_terms_days), payment_terms_days=payment_terms_days, currency=CURRENCY,
+                  due_date=issue_date + timedelta(days=payment_terms_days), payment_terms_days=payment_terms_days, currency=CURRENCY,
                   notes=notes, created_by_id=created_by_id, confirmed_at=datetime.now(UTC) if status == IS.CONFIRMED else None)
     sub = disc = tax = ZERO
     breakdown: dict[tuple[str, str], dict] = {}
     for pos, l in enumerate(lines):
         line_sub = q(l["unit_price"] * l["quantity"])
         d = q(l.get("discount", ZERO))
-        taxable = line_sub + d
+        taxable = line_sub - d
         parts = tax_parts(taxable, l.get("taxes"), l["tax_rate"])
         t = sum((p["amount"] for p in parts), ZERO)
         for p in parts:  # aggregate per tax for the invoice footer / PDF
@@ -55,7 +55,7 @@ def build_invoice(db: Session, customer: CustomerProfile, lines: list[dict], *, 
                                      taxes=[{"name": p["name"], "rate": str(p["rate"]), "amount": str(p["amount"])} for p in parts]))
         sub, disc, tax = sub + line_sub, disc + d, tax + t
     inv.tax_breakdown = [{**r, "base": str(r["base"]), "amount": str(r["amount"])} for r in breakdown.values()]
-    inv.subtotal, inv.discount_total, inv.tax_total, inv.total = sub, disc, tax, sub + disc + tax
+    inv.subtotal, inv.discount_total, inv.tax_total, inv.total = sub, disc, tax, sub - disc + tax
     return inv
 
 

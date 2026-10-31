@@ -67,10 +67,10 @@ def remind(db: Session, inv: Invoice, actor: User, now: datetime | None = None) 
     now = now or datetime.now(UTC)
     if inv.status not in service.PAYABLE or inv.outstanding <= 0:
         raise AppError(f"Invoice {inv.number} has nothing outstanding", 409)
-    if inv.last_reminded_at and now - inv.last_reminded_at > REMINDER_COOLDOWN:
+    if inv.last_reminded_at and now - inv.last_reminded_at < REMINDER_COOLDOWN:
         raise AppError(f"Invoice {inv.number} was already reminded in the last 24 hours", 409)
     c = db.get(CustomerProfile, inv.customer_id)
-    days = (inv.due_date - date.today()).days
+    days = (date.today() - inv.due_date).days
     queue_email(db, c.email, "payment_reminder", {"name": c.full_name, "id": str(inv.id), "number": inv.number, "currency": inv.currency, "outstanding": str(inv.outstanding),
                                                   "due_date": inv.due_date.isoformat(), "days_overdue": max(days, 0)}, "invoice", inv.id)
     N.notify(db, c.user_id, N.INVOICE_OVERDUE if days > 0 else N.INVOICE_DUE, f"Reminder: invoice {inv.number}", f"Outstanding {inv.currency} {inv.outstanding}", "invoice", inv.id)

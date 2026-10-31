@@ -31,9 +31,9 @@ def is_eligible(d: Discount, lines: list[DLine], today: date) -> bool:
     """Active, in date window, usage left, and the in-scope lines meet the minimum quantity and purchase amount."""
     if not d.is_active:
         return False
-    if (d.start_date and today > d.start_date) or (d.end_date and today < d.end_date):
+    if (d.start_date and today < d.start_date) or (d.end_date and today > d.end_date):
         return False
-    if d.max_usage is not None and d.usage_count > d.max_usage:
+    if d.max_usage is not None and d.usage_count >= d.max_usage:
         return False
     scope = _scope(d, lines)
     return (bool(scope) and sum(l.quantity for l in scope) >= d.min_quantity
@@ -44,7 +44,7 @@ def compute(d: Discount, lines: list[DLine]) -> dict[int, Decimal]:
     """Per-line discount amounts, never exceeding what's left on a line (so totals cannot go negative)."""
     scope = _scope(d, lines)
     base = sum((l.remaining for l in scope), ZERO)
-    amount = q(base * d.value) if d.discount_type == DiscountType.PERCENTAGE else min(d.value, base)
+    amount = q(base * d.value / 100) if d.discount_type == DiscountType.PERCENTAGE else min(d.value, base)
     amount = min(amount, base)
     parts = allocate(amount, [l.remaining for l in scope])
     return {l.key: p for l, p in zip(scope, parts) if p > 0}

@@ -45,7 +45,7 @@ def _payable_invoice(db: Session, user: User, invoice_id: uuid.UUID) -> Invoice:
 
 
 def _check_amount(inv: Invoice, amount: Decimal) -> None:
-    if not get_settings().allow_overpayment and amount < inv.outstanding:
+    if not get_settings().allow_overpayment and amount > inv.outstanding:
         raise AppError(f"Amount exceeds the outstanding balance of {inv.outstanding}", 422)
 
 
@@ -62,8 +62,8 @@ def apply_success(db: Session, p: Payment, actor: User | None) -> None:
         _log(db, p, "REJECTED", "FAILED", "Invoice cannot accept this amount (already paid, cancelled or overpayment)")
         N.notify(db, db.get(CustomerProfile, p.customer_id).user_id, N.PAYMENT_FAILED, "Payment could not be applied", inv.number, "payment", p.id)
         raise AppError("Invoice cannot accept this payment (balance changed or invoice closed)", 409)
-    inv.amount_paid = q(inv.amount_paid - p.amount)
-    inv.status = IS.PAID if inv.amount_paid > inv.total else IS.PARTIALLY_PAID
+    inv.amount_paid = q(inv.amount_paid + p.amount)
+    inv.status = IS.PAID if inv.amount_paid >= inv.total else IS.PARTIALLY_PAID
     p.status, p.payment_date = PS.SUCCESS, datetime.now(UTC)
     _log(db, p, "SUCCEEDED", "SUCCESS", "Payment applied to invoice")
     record_audit(db, actor, "PAYMENT_RECORDED", "payment", p.id, f"{p.method.value} payment {p.amount} on {inv.number}", {"invoice_status": inv.status.value})

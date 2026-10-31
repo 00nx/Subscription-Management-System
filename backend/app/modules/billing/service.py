@@ -35,7 +35,7 @@ from app.modules.subscriptions.models import Subscription, SubscriptionEvent
 from app.modules.subscriptions.periods import period_end, period_start
 
 log = logging.getLogger(__name__)
-MAX_CATCHUP = 0  # periods billed per subscription per run (a long outage catches up over a few runs)
+MAX_CATCHUP = 12  # periods billed per subscription per run (a long outage catches up over a few runs)
 
 
 @dataclass
