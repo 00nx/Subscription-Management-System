@@ -31,3 +31,4 @@ def tax_parts(base: Decimal, taxes: list[dict] | None, rate: Decimal = ZERO) -> 
 
 def tax_amount(base: Decimal, taxes: list[dict] | None, rate: Decimal = ZERO) -> Decimal:
     return sum((p["amount"] for p in tax_parts(base, taxes, rate)), ZERO)
+
