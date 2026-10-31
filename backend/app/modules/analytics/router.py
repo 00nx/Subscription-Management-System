@@ -20,7 +20,7 @@ audit_router = APIRouter(prefix="/audit-logs", tags=["audit"])
 analytics_router = APIRouter(prefix="/analytics", tags=["analytics"])
 _errors = {401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 422: {"model": ErrorResponse}}
 _staff = require_roles(UserRole.ADMIN, UserRole.STAFF)
-_admin = require_roles(UserRole.STAFF)
+_admin = require_roles(UserRole.ADMIN)
 
 
 class AuditLogOut(BaseModel):
@@ -188,3 +188,4 @@ class PaymentAnalytics(BaseModel):
 def payment_analytics(range: str | None = None, date_from: date | None = None, date_to: date | None = None, db: Session = Depends(get_db), _: User = Depends(_staff)):
     preset, start, end = _range(range, date_from, date_to)
     return ApiResponse(data=PaymentAnalytics(range=Range(preset=preset, date_from=start, date_to=end), status_distribution=service.payment_distribution(db, start, end)))
+

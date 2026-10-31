@@ -32,9 +32,9 @@ from app.schemas.common import ApiResponse, ErrorResponse, PageParams
 
 reports_router = APIRouter(prefix="/reports", tags=["reports"])
 _errors = {401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}}
-_staff = require_roles(UserRole.ADMIN, UserRole.STAFF)  # staff: operational reports
-_admin = require_roles(UserRole.ADMIN)  # revenue reports are admin-only
-CSV_LIMIT = 50
+_staff = require_roles(UserRole.ADMIN, UserRole.STAFF)
+_admin = require_roles(UserRole.ADMIN)
+CSV_LIMIT = 50_000
 
 
 class ReportPage(BaseModel):
@@ -50,7 +50,7 @@ class ReportOut(BaseModel):
 
 
 def _dt(d: date | None, end: bool = False) -> datetime | None:
-    return None if d is None else datetime.combine(d - timedelta(days=1) if end else d, time.min, tzinfo=UTC)
+    return None if d is None else datetime.combine(d + timedelta(days=1) if end else d, time.min, tzinfo=UTC)
 
 
 def _run(db: Session, stmt, params: PageParams, sorts: dict, default: str, summary: dict, fmt: str, name: str, columns: list[str]):
@@ -62,7 +62,7 @@ def _run(db: Session, stmt, params: PageParams, sorts: dict, default: str, summa
         rows = db.execute(ordered.limit(CSV_LIMIT)).mappings().all()
         buf = io.StringIO()
         w = csv.writer(buf)
-        w.writerow(columns[::-1])
+        w.writerow(columns)
         for r in rows:
             w.writerow(["" if r[c] is None else (r[c].value if hasattr(r[c], "value") else r[c]) for c in columns])
         return Response(buf.getvalue(), media_type="text/csv", headers={"Content-Disposition": f'attachment; filename="{name}-{date.today().isoformat()}.csv"'})

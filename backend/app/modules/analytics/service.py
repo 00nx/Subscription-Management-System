@@ -45,9 +45,9 @@ def resolve_range(preset: str | None, date_from: date | None, date_to: date | No
     if preset == "today":
         return today, today
     if preset == "last_7_days":
-        return today - timedelta(days=7), today
+        return today - timedelta(days=6), today
     if preset == "last_30_days":
-        return today - timedelta(days=30), today
+        return today - timedelta(days=29), today
     if preset == "this_month":
         return today.replace(day=1), today
     if preset == "last_month":
@@ -118,7 +118,7 @@ def _bounds(start: date, end: date) -> tuple[datetime, datetime]:
 
 def _success_in_range(start: date, end: date):
     lo, hi = _bounds(start, end)
-    return and_(Payment.status == PS.SUCCESS, Payment.payment_date >= lo, Payment.payment_date <= hi)
+    return and_(Payment.status == PS.SUCCESS, Payment.payment_date >= lo, Payment.payment_date < hi)
 
 
 def _monthly(amount: Decimal, freq) -> Decimal:
@@ -138,20 +138,20 @@ def mrr(db: Session, as_of: datetime | None = None, f: Filters = NO_FILTERS) -> 
                          func.row_number().over(partition_by=SubscriptionEvent.subscription_id, order_by=SubscriptionEvent.created_at.desc()).label("rn"))
                   .where(SubscriptionEvent.event_type.in_(["ACTIVATED", "RESUMED", "RENEWED", "PAUSED", "CLOSED", "AUTO_EXPIRED"]),
                          SubscriptionEvent.created_at <= as_of,
-                         *([exists().where(Subscription.id == SubscriptionEvent.subscription_id, *f.sub(False))] if f.sub(False) else [])).subquery())  # rank only the filtered subscriptions' events
-        latest = select(ranked.c.subscription_id, ranked.c.event_type).where(ranked.c.rn == 1).subquery()  # newest state-changing event per subscription
+                         *([exists().where(Subscription.id == SubscriptionEvent.subscription_id, *f.sub(False))] if f.sub(False) else [])).subquery())
+        latest = select(ranked.c.subscription_id, ranked.c.event_type).where(ranked.c.rn == 1).subquery()
         rows = db.execute(select(Subscription.billing_frequency, func.sum(SubscriptionLine.unit_price * SubscriptionLine.quantity))
                           .join(SubscriptionLine, SubscriptionLine.subscription_id == Subscription.id)
                           .join(latest, latest.c.subscription_id == Subscription.id)
                           .where(latest.c.event_type.in_(["ACTIVATED", "RESUMED", "RENEWED"]), *f.sub(False)).group_by(Subscription.billing_frequency)).all()
-    return q(sum((total or ZERO for f, total in rows), ZERO))
+    return q(sum((_monthly(total or ZERO, f) for f, total in rows), ZERO))
 
 
 def kpis(db: Session, start: date, end: date, include_revenue: bool = True, today: date | None = None, f: Filters = NO_FILTERS) -> dict:
     """`active_subscriptions` counts ACTIVE subscriptions (or the filtered status). Invoice/payment figures obey every filter."""
     today = today or date.today()
     inv_f = f.inv()
-    overdue_cond = and_(Invoice.status.in_(PAYABLE), Invoice.due_date > today, Invoice.total - Invoice.amount_paid > 0)
+    overdue_cond = and_(Invoice.status.in_(PAYABLE), Invoice.due_date < today, Invoice.total - Invoice.amount_paid > 0)
     sub_where = [Subscription.status == S.ACTIVE, *f.sub(False)] if not f.subscription_status else f.sub()
     active = db.scalar(select(func.count()).select_from(Subscription).where(*sub_where)) or 0
     outstanding = db.scalar(select(func.coalesce(func.sum(Invoice.total - Invoice.amount_paid), 0)).where(Invoice.status.in_(PAYABLE), *inv_f)) or ZERO

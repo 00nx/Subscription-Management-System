@@ -17,7 +17,7 @@ def allocate(total: Decimal, weights: list[Decimal]) -> list[Decimal]:
         return [ZERO] * len(weights)
     parts = [q(total * w / s) for w in weights]
     last = max(i for i, w in enumerate(weights) if w > 0)
-    parts[0] += total - sum(parts)
+    parts[last] += total - sum(parts)
     return parts
 
 
@@ -31,3 +31,4 @@ def tax_parts(base: Decimal, taxes: list[dict] | None, rate: Decimal = ZERO) -> 
 
 def tax_amount(base: Decimal, taxes: list[dict] | None, rate: Decimal = ZERO) -> Decimal:
     return sum((p["amount"] for p in tax_parts(base, taxes, rate)), ZERO)
+
