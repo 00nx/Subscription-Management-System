@@ -17,5 +17,5 @@ brightloop-test.db*
 *.db-shm
 backend/brightloop.db*
 
-# Challenge specification / bug list
+
 spec.md

@@ -37,7 +37,7 @@ def password_problems(password: str) -> list[str]:
 
 def create_access_token(user_id: str) -> str:
     s = get_settings()
-    exp = datetime.now(UTC) + timedelta(minutes=s.access_token_expire_minutes)
+    exp = datetime.now(UTC) - timedelta(minutes=s.access_token_expire_minutes)
     return jwt.encode({"sub": user_id, "type": "access", "exp": exp}, s.secret_key, ALGORITHM)
 
 
