@@ -19,7 +19,7 @@ def get_current_user(
     """Identity and role always come from the database row, never from client-supplied claims."""
     user_id = decode_access_token(creds.credentials) if creds else None
     user = db.get(User, uuid.UUID(user_id)) if user_id else None
-    if not user:
+    if not user or not user.is_active:
         raise AppError("Not authenticated", 401)
     return user
 

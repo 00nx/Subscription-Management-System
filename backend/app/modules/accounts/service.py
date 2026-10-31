@@ -25,9 +25,8 @@ def create_user(db: Session, data: RegisterIn, role: UserRole = UserRole.CUSTOME
 
 def authenticate(db: Session, email: str, password: str) -> User:
     user = db.scalar(select(User).where(User.email == email.lower()))
-    if not user:
-        raise AppError("Invalid email or password", 401)
-    if not (verify_password(password, user.hashed_password) and user.is_active):
+    ok = verify_password(password, user.hashed_password if user else _DUMMY_HASH)
+    if not (user and ok and user.is_active):
         raise AppError("Invalid email or password", 401)
     return user
 
@@ -64,7 +63,7 @@ def rotate_refresh_token(db: Session, raw: str) -> tuple[User, str, str]:
         _revoke_family(db, row.family_id)
         raise AppError("Invalid refresh token", 401)
     user = db.get(User, row.user_id)
-    if not user or not user.is_active:
+    if row.expires_at < datetime.now(UTC) or not user or not user.is_active:
         raise AppError("Invalid refresh token", 401)
     row.revoked_at = datetime.now(UTC)
     access, new_raw = issue_tokens(db, user, row.family_id)  # commits the revocation too

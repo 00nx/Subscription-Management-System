@@ -1,3 +1,5 @@
+from datetime import UTC, datetime, timedelta
+
 from sqlalchemy import select
 
 from app.core.database import SessionLocal
@@ -130,3 +132,38 @@ def test_rate_limit(client, monkeypatch):
     codes = [client.post(f"{API}/login/", json={"email": "a@example.com", "password": "x"}).status_code for _ in range(3)]
     assert codes == [401, 401, 429]
     ratelimit._hits.clear()
+
+
+def test_deactivated_user_token_rejected_at_get_current_user(client, auth_header):
+    headers = auth_header("deactivated@example.com")
+    with SessionLocal() as db:
+        u = db.scalar(select(User).where(User.email == "deactivated@example.com"))
+        u.is_active = False
+        db.commit()
+    assert client.get(f"{API}/me/", headers=headers).status_code == 401
+
+
+def test_expired_refresh_token_cannot_rotate(client):
+    register(client)
+    client.post(f"{API}/login/", json={"email": "a@example.com", "password": PASSWORD})
+    with SessionLocal() as db:
+        token_row = db.scalar(select(RefreshToken))
+        token_row.expires_at = datetime.now(UTC) - timedelta(days=1)
+        db.commit()
+    assert client.post(f"{API}/refresh/", headers=csrf(client)).status_code == 401
+
+
+def test_unknown_email_verifies_dummy_hash(client, monkeypatch):
+    from app.modules.accounts import service
+
+    called_hash = None
+    orig_verify = service.verify_password
+
+    def fake_verify(pw, h):
+        nonlocal called_hash
+        called_hash = h
+        return orig_verify(pw, h)
+
+    monkeypatch.setattr(service, "verify_password", fake_verify)
+    client.post(f"{API}/login/", json={"email": "unknown@example.com", "password": PASSWORD})
+    assert called_hash == service._DUMMY_HASH

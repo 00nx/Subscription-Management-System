@@ -36,7 +36,7 @@ def _clear_cookies(response: Response) -> None:
 
 def _check_csrf(request: Request) -> None:
     cookie, header = request.cookies.get(CSRF_COOKIE), request.headers.get(CSRF_HEADER)
-    if not cookie or not header or cookie != header:
+    if not cookie or not header or not secrets.compare_digest(cookie, header):
         raise AppError("CSRF validation failed", 403)
 
 

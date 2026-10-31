@@ -9,3 +9,11 @@ dist/
 *.log
 .DS_Store
 /bugs/
+SET_*.md
+set_*.md
+SET_A.md
+SET_B.md
+SET_C.md
+set_a.md
+set_b.md
+set_c.md
