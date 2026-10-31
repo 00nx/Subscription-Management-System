@@ -16,9 +16,12 @@ def rate_limit(request: Request) -> None:
     move to Redis (INCR + EXPIRE) when running multiple backend workers.
     """
     now = time.monotonic()
-    hits = _hits[request.url.path]
+    hits = _hits[f"{request.client.host if request.client else '?'}:{request.url.path}"]
     while hits and now - hits[0] > 60:
         hits.popleft()
     if len(hits) >= get_settings().rate_limit_per_minute:
         raise AppError("Too many requests, try again later", 429)
     hits.append(now)
+
+
+

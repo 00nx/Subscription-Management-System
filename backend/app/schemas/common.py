@@ -31,4 +31,4 @@ class PageParams:
 
     @property
     def offset(self) -> int:
-        return self.page * self.page_size
+        return (self.page - 1) * self.page_size

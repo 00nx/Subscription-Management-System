@@ -73,9 +73,7 @@ def rotate_refresh_token(db: Session, raw: str) -> tuple[User, str, str]:
 def revoke_refresh_token(db: Session, raw: str) -> None:
     row = db.scalar(select(RefreshToken).where(RefreshToken.token_hash == hash_token(raw)))
     if row:
-        db.execute(update(RefreshToken).where(RefreshToken.user_id == row.user_id, RefreshToken.revoked_at.is_(None))
-                   .values(revoked_at=datetime.now(UTC)))
-        db.commit()
+        _revoke_family(db, row.family_id)
 
 
 def bootstrap_admin(db: Session) -> None:
