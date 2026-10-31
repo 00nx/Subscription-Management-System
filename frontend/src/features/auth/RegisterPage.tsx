@@ -17,7 +17,7 @@ export default function RegisterPage() {
       await authService.register(values)
       navigate('/login', { replace: true })
     } catch (err) {
-      applyServerError(err, setError)
+      applyServerError(err, setError, Object.keys(values))
     }
   })
 

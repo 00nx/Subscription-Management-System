@@ -20,7 +20,7 @@ export default function LoginPage() {
       const user = await login(values)
       navigate(from ?? homeFor(user.role), { replace: true })
     } catch (err) {
-      applyServerError(err, setError)
+      applyServerError(err, setError, Object.keys(values))
     }
   })
 
